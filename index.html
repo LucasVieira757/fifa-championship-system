@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Copa FIFA Premium</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="hero">
+      <p class="eyebrow">Torneio entre amigos</p>
+      <h1>Copa FIFA Premium</h1>
+      <p class="subtitle">Mata-mata principal + repescagem dos “menos piores”.</p>
+    </header>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Jogadores</h2>
+        <span id="playerCount">0 jogadores</span>
+      </div>
+
+      <div class="form-row">
+        <input id="playerName" type="text" placeholder="Digite nome ou apelido" />
+        <button id="addPlayerBtn">Adicionar</button>
+      </div>
+
+      <ul id="playerList" class="player-list"></ul>
+
+      <div class="actions">
+        <button id="drawBtn" class="primary">Sortear Campeonato</button>
+        <button id="resetBtn" class="secondary">Reiniciar</button>
+      </div>
+    </section>
+
+    <section class="dashboard">
+      <article class="panel">
+        <h2>🏆 Chave Principal</h2>
+        <div id="mainBracket" class="matches"></div>
+      </article>
+
+      <article class="panel">
+        <h2>💀 Repescagem</h2>
+        <div id="loserBracket" class="matches"></div>
+      </article>
+    </section>
+
+    <section class="panel champions">
+      <h2>Resultado Final</h2>
+
+      <div class="champion-grid">
+        <div>
+          <span>Campeão Oficial</span>
+          <strong id="mainChampion">-</strong>
+        </div>
+
+        <div>
+          <span>Campeão dos Menos Piores</span>
+          <strong id="loserChampion">-</strong>
+        </div>
+      </div>
+    </section>
+  </main>
+    <script type="module" src="script.js"></script>
+</body>
+</html>
