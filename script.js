@@ -969,28 +969,28 @@ function renderCampoPlacar(partida, jogadorNumero) {
 
 async function resetTournament() {
   if (!isAdmin) {
-    alert("Apenas o organizador pode reiniciar.");
+    alert("Apenas o organizador pode finalizar.");
     return;
   }
 
-  const confirmReset = confirm(
-    "Deseja reiniciar tudo? Isso apagará jogadores, partidas e resultados deste campeonato."
+  const confirmFinish = confirm(
+    "Deseja finalizar este campeonato? O histórico será mantido."
   );
 
-  if (!confirmReset) return;
+  if (!confirmFinish) return;
 
-  const jogadoresSnapshot = await getDocs(jogadoresQuery());
+  await salvarEstado({
+    status: "finalizado"
+  });
 
-  for (const documento of jogadoresSnapshot.docs) {
-    await deleteDoc(doc(db, "jogadores", documento.id));
+  if (campeonatoDocId) {
+    await updateDoc(doc(db, "campeonatos", campeonatoDocId), {
+      status: "finalizado"
+    });
   }
 
-  const partidasSnapshot = await getDocs(partidasQuery());
-
-  for (const documento of partidasSnapshot.docs) {
-    await deleteDoc(doc(db, "partidas", documento.id));
-  }
-
+  alert("Campeonato finalizado. O histórico foi mantido.");
+}
   await setDoc(estadoRef(), {
     campeonatoCodigo,
     status: "aberto",
