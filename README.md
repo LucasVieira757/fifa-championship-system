@@ -1,5 +1,4 @@
-# 🏆 FIFA Championship Manager
-
+# 🏆 Gerenciamento de FIFA
 Sistema de gerenciamento de campeonatos FIFA desenvolvido com:
 
 - ⚡ JavaScript Vanilla
