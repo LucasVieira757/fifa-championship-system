@@ -35,6 +35,7 @@ const db = getFirestore(app);
 
 /* =========================================================
    CONFIGURAÇÃO DA SALA / CAMPEONATO
+
    Link público:
    index.html?id=TESTE123
 
@@ -77,6 +78,7 @@ let players = [];
 let playerDocs = [];
 let partidas = [];
 let estado = null;
+
 let unsubJogadores = null;
 let unsubPartidas = null;
 let unsubEstado = null;
@@ -88,21 +90,27 @@ let unsubEstado = null;
 init();
 
 async function init() {
-  await carregarCampeonato();
+  try {
+    await carregarCampeonato();
 
-  configurarModo();
+    if (!campeonatoDocId) return;
 
-  escutarJogadores();
-  escutarPartidas();
-  escutarEstado();
+    configurarModo();
+    escutarJogadores();
+    escutarPartidas();
+    escutarEstado();
 
-  addPlayerBtn.addEventListener("click", addPlayer);
-  drawBtn.addEventListener("click", startTournament);
-  resetBtn.addEventListener("click", resetTournament);
+    addPlayerBtn.addEventListener("click", addPlayer);
+    drawBtn.addEventListener("click", startTournament);
+    resetBtn.addEventListener("click", resetTournament);
 
-  playerInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") addPlayer();
-  });
+    playerInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") addPlayer();
+    });
+  } catch (error) {
+    console.error("Erro ao inicializar o sistema:", error);
+    alert("Erro ao carregar o campeonato. Verifique o console.");
+  }
 }
 
 async function carregarCampeonato() {
@@ -149,7 +157,7 @@ function configurarModo() {
 }
 
 /* =========================================================
-   QUERIES
+   REFERÊNCIAS E QUERIES
 ========================================================= */
 
 function jogadoresQuery() {
@@ -232,18 +240,15 @@ function escutarEstado() {
   unsubEstado = onSnapshot(estadoRef(), (snapshot) => {
     if (!snapshot.exists()) {
       estado = null;
+      mainChampion.textContent = "-";
+      loserChampion.textContent = "-";
       return;
     }
 
     estado = snapshot.data();
 
-    if (estado?.campeaoOficial) {
-      mainChampion.textContent = estado.campeaoOficial;
-    }
-
-    if (estado?.campeaoRepescagem) {
-      loserChampion.textContent = estado.campeaoRepescagem;
-    }
+    mainChampion.textContent = estado?.campeaoOficial || "-";
+    loserChampion.textContent = estado?.campeaoRepescagem || "-";
   });
 }
 
@@ -399,10 +404,20 @@ function createMatches(queue) {
   return { matches, byes };
 }
 
-function getLastMainRound() {
-  const rounds = Object.keys(estado?.losersByMainRound || {}).map(Number);
+function getLastMainRoundFromObject(obj) {
+  const rounds = Object.keys(obj || {}).map(Number);
+
   if (rounds.length === 0) return 0;
+
   return Math.max(...rounds);
+}
+
+async function getEstadoAtual() {
+  const snapshot = await getDoc(estadoRef());
+
+  if (!snapshot.exists()) return {};
+
+  return snapshot.data();
 }
 
 async function salvarEstado(novoEstado) {
@@ -464,6 +479,11 @@ async function startTournament() {
     return;
   }
 
+  if (estado?.status === "em_andamento") {
+    alert("O campeonato já está em andamento.");
+    return;
+  }
+
   const confirmar = confirm("Deseja iniciar o campeonato?");
 
   if (!confirmar) return;
@@ -474,6 +494,8 @@ async function startTournament() {
 
   await salvarEstado({
     status: "em_andamento",
+    statusPrincipal: "em_andamento",
+    statusRepescagem: "aguardando",
     mainQueue: filaInicial,
     mainRound: 1,
     loserRound: 1,
@@ -484,6 +506,14 @@ async function startTournament() {
     campeaoOficial: null,
     campeaoRepescagem: null
   });
+
+  if (campeonatoDocId) {
+    await updateDoc(doc(db, "campeonatos", campeonatoDocId), {
+      status: "em_andamento",
+      campeaoOficial: null,
+      campeaoRepescagem: null
+    });
+  }
 
   await criarRodadaPrincipal({
     mainQueue: filaInicial,
@@ -497,8 +527,8 @@ async function startTournament() {
 ========================================================= */
 
 async function criarRodadaPrincipal(state) {
-  const fila = state.mainQueue;
-  const rodada = state.mainRound;
+  const fila = state.mainQueue || [];
+  const rodada = state.mainRound || 1;
 
   if (fila.length === 1) {
     const campeao = fila[0];
@@ -528,6 +558,13 @@ async function criarRodadaPrincipal(state) {
 }
 
 async function confirmarPartidaPrincipal(partida, gols1, gols2) {
+  if (!isAdmin) return;
+
+  if (!Number.isInteger(gols1) || !Number.isInteger(gols2) || gols1 < 0 || gols2 < 0) {
+    alert("Informe placares válidos.");
+    return;
+  }
+
   if (gols1 === gols2) {
     alert("Empate não permitido. Defina um vencedor.");
     return;
@@ -633,7 +670,7 @@ async function iniciarRepescagem() {
 }
 
 async function criarRodadaRepescagem(state) {
-  const loserRoundAtual = state.loserRound;
+  const loserRoundAtual = state.loserRound || 1;
   const losersByMainRound = state.losersByMainRound || {};
   const repescagemSurvivorsAtual = state.repescagemSurvivors || [];
 
@@ -690,19 +727,25 @@ async function criarRodadaRepescagem(state) {
 }
 
 async function confirmarPartidaRepescagem(partida, gols1, gols2) {
+  if (!isAdmin) return;
+
+  if (!Number.isInteger(gols1) || !Number.isInteger(gols2) || gols1 < 0 || gols2 < 0) {
+    alert("Informe placares válidos.");
+    return;
+  }
+
   if (gols1 === gols2) {
     alert("Empate não permitido. Defina um vencedor.");
     return;
   }
 
   const vencedor = gols1 > gols2 ? partida.jogador1 : partida.jogador2;
-  const perdedor = gols1 > gols2 ? partida.jogador2 : partida.jogador1;
 
   await updateDoc(doc(db, "partidas", partida.id), {
     golsJogador1: gols1,
     golsJogador2: gols2,
     vencedor,
-    perdedor,
+    perdedor: gols1 > gols2 ? partida.jogador2 : partida.jogador1,
     finalizada: true,
     finalizadaEm: serverTimestamp()
   });
@@ -774,7 +817,6 @@ async function tentarAvancarRodadaRepescagem(rodada) {
 
 async function criarRodadaFinalRepescagem(sobreviventes, rodada) {
   const fila = shuffle(sobreviventes);
-
   const { matches, byes } = createMatches(fila);
 
   await salvarEstado({
@@ -792,7 +834,13 @@ async function criarRodadaFinalRepescagem(sobreviventes, rodada) {
 }
 
 async function finalizarRepescagem(sobreviventes) {
-  if (!sobreviventes || sobreviventes.length === 0) return;
+  if (!sobreviventes || sobreviventes.length === 0) {
+    await salvarEstado({
+      statusRepescagem: "finalizado",
+      status: "finalizado"
+    });
+    return;
+  }
 
   const campeaoRepescagem = sobreviventes[0];
 
@@ -804,25 +852,10 @@ async function finalizarRepescagem(sobreviventes) {
 
   if (campeonatoDocId) {
     await updateDoc(doc(db, "campeonatos", campeonatoDocId), {
-      campeaoRepescagem
+      campeaoRepescagem,
+      status: "finalizado"
     });
   }
-}
-
-function getLastMainRoundFromObject(obj) {
-  const rounds = Object.keys(obj || {}).map(Number);
-
-  if (rounds.length === 0) return 0;
-
-  return Math.max(...rounds);
-}
-
-async function getEstadoAtual() {
-  const snapshot = await getDoc(estadoRef());
-
-  if (!snapshot.exists()) return {};
-
-  return snapshot.data();
 }
 
 /* =========================================================
@@ -852,11 +885,9 @@ function renderGrupoDePartidas(container, lista, tipo) {
 
       const title = document.createElement("h3");
 
-      if (tipo === "principal") {
-        title.textContent = `Rodada ${rodada} - Chave Principal`;
-      } else {
-        title.textContent = `Rodada ${rodada} - Repescagem`;
-      }
+      title.textContent = tipo === "principal"
+        ? `Rodada ${rodada} - Chave Principal`
+        : `Rodada ${rodada} - Repescagem`;
 
       roundBox.appendChild(title);
 
@@ -926,6 +957,11 @@ function createMatchCardFromDatabase(partida) {
       const gols1 = Number(card.querySelector(".score-player-1").value);
       const gols2 = Number(card.querySelector(".score-player-2").value);
 
+      if (!Number.isInteger(gols1) || !Number.isInteger(gols2) || gols1 < 0 || gols2 < 0) {
+        alert("Informe placares válidos.");
+        return;
+      }
+
       if (gols1 === gols2) {
         alert("Empate não permitido. Defina um vencedor.");
         return;
@@ -969,31 +1005,23 @@ function renderCampoPlacar(partida, jogadorNumero) {
 
 async function resetTournament() {
   if (!isAdmin) {
-    alert("Apenas o organizador pode finalizar.");
+    alert("Apenas o organizador pode resetar.");
     return;
   }
 
-  const confirmFinish = confirm(
-    "Deseja finalizar este campeonato? O histórico será mantido."
+  const confirmReset = confirm(
+    "Deseja resetar este campeonato? As partidas serão apagadas e os jogadores serão mantidos."
   );
 
-  if (!confirmFinish) return;
+  if (!confirmReset) return;
 
-  await salvarEstado({
-    status: "finalizado"
-  });
+  await limparPartidasDoCampeonato();
 
-  if (campeonatoDocId) {
-    await updateDoc(doc(db, "campeonatos", campeonatoDocId), {
-      status: "finalizado"
-    });
-  }
-
-  alert("Campeonato finalizado. O histórico foi mantido.");
-}
   await setDoc(estadoRef(), {
     campeonatoCodigo,
     status: "aberto",
+    statusPrincipal: null,
+    statusRepescagem: null,
     mainQueue: [],
     mainRound: 1,
     loserRound: 1,
@@ -1016,5 +1044,6 @@ async function resetTournament() {
 
   mainChampion.textContent = "-";
   loserChampion.textContent = "-";
+
+  alert("Campeonato resetado com sucesso.");
 }
-    
